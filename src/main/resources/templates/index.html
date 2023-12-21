@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="pastel">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.4.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>RabbitMQ-example</title>
+    <style>
+        @font-face {
+            font-family: 'RIDIBatang';
+            src: url('https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.0/RIDIBatang.woff') format('woff');
+            font-weight: normal;
+            font-style: normal;
+        }
+
+        body {
+            font-family: 'RIDIBatang',serif;
+            font-size: 25px;
+        }
+
+        .chat-container {
+            font-size: 20px;
+        }
+
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@stomp/stompjs@7.0.0/bundles/stomp.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script>
+        /*<![CDATA[*/
+        let port = [[${port}]];
+        /*]]>*/
+
+        /*
+        const sub_chan = "/rooms/app.chat.rooms.room.1";
+        // log --
+        <<< ERROR
+        content-length:155
+        version:1.0,1.1,1.2
+        content-type:text/plain
+        message:Unknown destination
+        content-length:155
+
+
+        Broker reported error: Unknown destination
+        Additional details: '/rooms/app.chat.rooms.room.1' is not a valid destination.
+        Valid destination types are: /temp-queue, /exchange, /topic, /queue, /amq/queue, /reply-queue/.
+         */
+        const sub_chan = "/exchange/app.chat.rooms/room.1";
+        // const sub_chan = "/topic/room.1";
+
+        function getUserId() {
+            return `user${Math.floor(Math.random() * 1001)}`;
+        }
+
+        const userId = getUserId();
+
+        const IN_MSG = ["card", "bg-neutral", "inline-block", "p-4", "max-w-2xl", "my-2", "mr-auto", "w-max"];
+        const OUT_MSG = ["card", "shadow-lg", "inline-block", "p-4", "max-w-2xl", "my-2", "ml-auto"];
+
+        function genChatComponent(userId, inData) {
+            const div = document.createElement('div');
+            const p  = document.createElement('p');
+
+            div.appendChild(p);
+            div.classList.add(...((userId === inData.userId) ? OUT_MSG : IN_MSG));
+
+            p.innerText = inData.msg;
+
+            return div;
+        }
+
+        const client = new StompJs.Client({
+            webSocketFactory: () => new SockJS(`http://localhost:${port}/app/chat`),
+            debug: function (str) {
+                console.log(str);
+            },
+            // reconnectDelay: 5000,
+            // heartbeatIncoming: 4000,
+            // heartbeatOutgoing: 4000,
+        });
+
+        client.onConnect = function (frame) {
+            client.subscribe(sub_chan, (msg) => {
+                const inData = JSON.parse(msg.body);
+                const container = document.getElementById("chat-container");
+                container.appendChild(genChatComponent(userId, inData));
+            })
+
+        };
+
+        client.onStompError = function (frame) {
+            console.log('Broker reported error: ' + frame.headers['message']);
+            console.log('Additional details: ' + frame.body);
+        };
+
+        client.onClose = (e) => {
+            console.log('Connection closed.');
+        }
+
+        client.activate();
+
+        function btnEventHandler(e) {
+
+            const input = document.getElementById("chat-input-content");
+
+            const data = {
+                userId,
+                msg : input.value
+            }
+
+            input.value = "";
+
+            client.publish(
+                { destination: "/chat/send", body: JSON.stringify(data) }
+            );
+        }
+
+    </script>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <div class="menu-container flex">
+        <div class="navbar bg-neutral text-primary-content">
+            <p class="text-xl ml-8">Simple Chat Exp</p>
+        </div>
+    </div>
+
+    <div class="mx-auto container shadow-lg min-h-full flex flex-col flex-grow my-6">
+
+        <div id="chat-container" class="chat-container flex flex-grow flex-col p-4 h-44 overflow-y-auto">
+        </div>
+
+        <div class="input-container flex my-6">
+            <div class="input-container flex flex-grow ml-6">
+                <input id="chat-input-content" type="text" placeholder="메시지를 입력해주세요." class="input input-bordered w-full" />
+            </div>
+            <div class="btn-container flex ml-2 mr-4">
+                <button class="btn btn-neutral" onclick="btnEventHandler()">전송</button>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
